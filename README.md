@@ -1,6 +1,6 @@
 # European Option Pricer
 
-Simple web app for European option pricing using **Black–Scholes** (closed-form) and **Monte Carlo** simulations.
+Simple [web app](https://nalin-mathur15-options-pricing-app-8lgsob.streamlit.app) for European option pricing using **Black–Scholes** (closed-form) and **Monte Carlo** simulations.
 Spot prices are fetched from the **Yahoo Finance API** via `pandas-datareader`.
 External HTTP calls are cached with 5 minute TTL
 
