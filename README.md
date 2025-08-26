@@ -13,7 +13,7 @@ Simple [web app](https://nalin-mathur15-options-pricing-app-8lgsob.streamlit.app
   - Risk-free rate $r$ (annual, continuously-compounded)
   - Volatility $\sigma$ (annual)
   - Expiry date
-  - Monte Carlo settings: $\#\text{paths}$, chunk size, antithetic variates
+  - Monte Carlo settings: #paths, chunk size, antithetic variates
 - Computes Call/Put prices with BS and Monte Carlo.
 - Visuals:
   - Histogram (bar chart) sample of simulated terminal prices \($S_T$\)
