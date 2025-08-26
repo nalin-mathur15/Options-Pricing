@@ -1,6 +1,3 @@
-# app.py — Python 3.12+ compatible European option pricer
-# Streamlit UI + Black–Scholes + Monte Carlo; Yahoo prices via yfinance; HTTP caching via requests-cache.
-
 import math
 import datetime as dt
 from dataclasses import dataclass
@@ -13,18 +10,14 @@ from scipy.stats import norm
 import requests_cache
 import yfinance as yf
 
-# ----------------------------------------------------------------------------
 # Global HTTP cache (caches underlying HTTP calls yfinance makes)
-# ----------------------------------------------------------------------------
 requests_cache.install_cache(
     cache_name="yahoo_cache",
     backend="sqlite",
-    expire_after=300,  # 5 minutes
+    expire_after=300,
 )
 
-# ----------------------------------------------------------------------------
-# Core data structures and pricing functions
-# ----------------------------------------------------------------------------
+# Data structures and pricing functions
 @dataclass
 class BSInputs:
     S: float      # Spot
@@ -37,7 +30,6 @@ def _clamp_positive(x: float, eps: float = 1e-12) -> float:
     return max(float(x), eps)
 
 def black_scholes_prices(inp: BSInputs):
-    """Black–Scholes closed-form prices (no dividends). Returns (call, put, d1, d2)."""
     S, K, r, sigma, T = float(inp.S), float(inp.K), float(inp.r), float(inp.sigma), float(inp.T)
     sigma = _clamp_positive(sigma)
     T = _clamp_positive(T)
@@ -56,10 +48,7 @@ def black_scholes_prices(inp: BSInputs):
     put = K * disc * Nmd2 - S * Nmd1
     return float(call), float(put), d1, d2
 
-def monte_carlo_prices(inp: BSInputs, n_sims: int = 100_000, chunk_size: int = 250_000, antithetic: bool = True, seed: int = 42):
-    """Monte Carlo pricing for European call/put under GBM using exact solution for S_T.
-    Computes discounted expectation of payoffs. Chunked to keep memory low.
-    """
+def monte_carlo_prices(inp: BSInputs, n_sims: int = 100000, chunk_size: int = 250000, antithetic: bool = True, seed: int = 42):
     S, K, r, sigma, T = float(inp.S), float(inp.K), float(inp.r), float(inp.sigma), float(inp.T)
     sigma = _clamp_positive(sigma)
     T = _clamp_positive(T)
@@ -90,37 +79,32 @@ def monte_carlo_prices(inp: BSInputs, n_sims: int = 100_000, chunk_size: int = 2
     put = disc * (put_sum / total_paths)
     return float(call), float(put)
 
-# ----------------------------------------------------------------------------
 # Data fetching (yfinance direct) with Streamlit cache
-# ----------------------------------------------------------------------------
 @st.cache_data(show_spinner=False, ttl=300)
 def fetch_latest_price(ticker: str):
-    """Fetch recent OHLC data and return (last_price, last_date, DataFrame)."""
     end = dt.date.today() + dt.timedelta(days=1)  # pad for TZ
     start = end - dt.timedelta(days=15)
     # auto_adjust=False keeps 'Adj Close' separate
     df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=False)
     if df is None or df.empty:
-        raise ValueError(f"No data returned for ticker '{ticker}'. Check the symbol.")
+        raise ValueError(f"No data returned for ticker '{ticker}'.")
     df = df.sort_index()
     price_col = "Adj Close" if "Adj Close" in df.columns else "Close"
     last_price = float(df.iloc[-1][price_col])
     last_date = pd.to_datetime(df.index[-1]).date()
     return last_price, last_date, df
 
-# ----------------------------------------------------------------------------
-# Streamlit UI
-# ----------------------------------------------------------------------------
+# UI
 st.set_page_config(page_title="European Option Pricer", page_icon="💹", layout="wide")
 st.title("European Option Pricer — Black–Scholes & Monte Carlo")
-st.caption("Yahoo prices via `yfinance`. HTTP calls cached 5 minutes via `requests-cache`.")
+st.caption("Prices via `yfinance`.")
 
 with st.sidebar:
     st.header("Inputs")
     ticker = st.text_input("Ticker", value="AAPL", help="Yahoo Finance symbol, e.g., AAPL, MSFT, TSLA")
 
     default_expiry = dt.date.today() + dt.timedelta(days=30)
-    expiry = st.date_input("Exercise (expiry) date", value=default_expiry)
+    expiry = st.date_input("Exercise date", value=default_expiry)
 
     K = st.number_input("Strike price (K)", min_value=0.0, value=150.00, step=1.00, format="%.2f")
     r_pct = st.number_input("Risk-free rate r (%)", value=2.00, step=0.05, format="%.3f",
@@ -130,8 +114,8 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Monte Carlo settings")
-    n_sims = st.number_input("Simulations", min_value=1_000, max_value=5_000_000, value=200_000, step=50_000)
-    chunk_size = st.number_input("Chunk size", min_value=10_000, max_value=1_000_000, value=250_000, step=10_000,
+    n_sims = st.number_input("Simulations", min_value=1000, max_value=5000000, value=200000, step=50000)
+    chunk_size = st.number_input("Chunk size", min_value=10000, max_value=1000000, value=250000, step=10000,
                                  help="Bigger = faster but uses more memory (batches random draws).")
     antithetic = st.toggle("Antithetic variates", value=True)
 
@@ -146,7 +130,6 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
-# Time to maturity (ACT/365); avoid zero
 today = dt.date.today()
 days_to_expiry = (expiry - today).days
 T = days_to_expiry / 365.0 if days_to_expiry > 0 else (1.0 / 252.0)
@@ -162,7 +145,6 @@ inp = BSInputs(
     T=float(T),
 )
 
-# Compute prices
 call_bs, put_bs, d1, d2 = black_scholes_prices(inp)
 call_mc, put_mc = monte_carlo_prices(inp, n_sims=int(n_sims), chunk_size=int(chunk_size), antithetic=bool(antithetic))
 
@@ -197,8 +179,7 @@ with st.expander("Model & inputs details"):
 tab_chart, tab_data = st.tabs(["Distribution (MC sample)", "Recent OHLC data"])
 
 with tab_chart:
-    # Draw a small independent sample for visualization speed
-    plot_sims = min(int(n_sims), 20_000)
+    plot_sims = min(int(n_sims), 20000)
     rng = np.random.default_rng(7)
     Z = rng.standard_normal(plot_sims)
     ST = inp.S * np.exp((inp.r - 0.5 * inp.sigma**2) * inp.T + inp.sigma * math.sqrt(inp.T) * Z)
